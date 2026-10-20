@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Master Studio - Professional Interactive Arena</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chess.js library for rule validation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .brand-font {
+            font-family: 'Cinzel', serif;
+        }
+
+        .code-font {
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* Dynamic Board & Theme Styling */
+        /* Theme 1: Classic Mahogany */
+        .theme-classic .square-light { background-color: #f0d9b5; color: #b58863; }
+        .theme-classic .square-dark { background-color: #b58863; color: #f0d9b5; }
+
+        /* Theme 2: Midnight Onyx */
+        .theme-onyx .square-light { background-color: #334155; color: #94a3b8; }
+        .theme-onyx .square-dark { background-color: #0f172a; color: #38bdf8; }
+
+        /* Theme 3: Minimal Slate */
+        .theme-minimal .square-light { background-color: #e2e8f0; color: #64748b; }
+        .theme-minimal .square-dark { background-color: #475569; color: #cbd5e1; }
+
+        /* Theme 4: Emerald Forest */
+        .theme-emerald .square-light { background-color: #e2e8f0; color: #059669; }
+        .theme-emerald .square-dark { background-color: #047857; color: #ecfdf5; }
+
+        /* Square Highlights */
+        .square-selected { background-color: rgba(245, 158, 11, 0.75) !important; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
+        .square-last-move { background-color: rgba(251, 191, 36, 0.35) !important; }
+        .square-check { background-color: #dc2626 !important; animation: pulse-red 1.2s infinite; }
+
+        @keyframes pulse-red {
+            0%, 100% { background-color: #dc2626; }
+            50% { background-color: #7f1d1d; }
+        }
+
+        /* Move Overlay Indicators */
+        .move-indicator {
+            width: 28%;
+            height: 28%;
+            border-radius: 50%;
+            background-color: rgba(16, 185, 129, 0.85);
+            pointer-events: none;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+        }
+        .capture-indicator {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 4px solid rgba(239, 68, 68, 0.8);
+            border-radius: 50%;
+            pointer-events: none;
+            box-sizing: border-box;
+        }
+
+        .chess-piece {
+            transition: transform 0.1s ease-out, filter 0.2s ease;
+            cursor: grab;
+            filter: drop-shadow(0px 4px 5px rgba(0,0,0,0.4));
+        }
+        .chess-piece:active { cursor: grabbing; transform: scale(1.08); }
+
+        /* Glassmorphism Panels */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #090d16; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        .eval-bar-fill { transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between antialiased theme-classic">
+
+    <!-- Top Navigation Bar -->
+    <header class="glass-panel sticky top-0 z-30 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-gradient-to-tr from-amber-600 to-amber-400 text-slate-950 p-2.5 rounded-xl shadow-lg shadow-amber-500/20">
+                    <i class="fa-solid fa-chess-queen text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="brand-font font-bold text-xl tracking-wider text-amber-400 leading-none">Chess Master Studio</h1>
+                    <p class="text-[11px] text-slate-400 font-medium mt-1">Interactive Custom Battleground</p>
+                </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="flex items-center space-x-2">
+                <button id="btn-deploy-guide" class="px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold text-xs flex items-center gap-2 hover:bg-emerald-500/20 transition-all">
+                    <i class="fa-solid fa-rocket"></i>
+                    <span class="hidden sm:inline">Deploy</span>
+                </button>
+                <button id="btn-sound" title="Toggle Sound" class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 transition-colors">
+                    <i id="sound-icon" class="fa-solid fa-volume-high"></i>
+                </button>
+                <button id="btn-flip" title="Flip Board & Profiles" class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-amber-400 transition-colors">
+                    <i class="fa-solid fa-rotate"></i>
+                </button>
+                <button id="btn-help" title="Rules & Notation Guide" class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-amber-400 transition-colors flex items-center gap-1.5 px-3">
+                    <i class="fa-solid fa-book-open"></i>
+                    <span class="hidden md:inline text-xs font-semibold">Rules & Preview</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="max-w-7xl mx-auto w-full p-2 sm:p-4 md:p-6 flex-1 flex flex-col lg:flex-row gap-6 justify-center items-start">
+
+        <!-- Left Panel: Custom Profiles & Props Settings -->
+        <aside class="w-full lg:w-80 glass-panel rounded-2xl p-4 flex flex-col gap-4 shadow-2xl order-2 lg:order-1">
+            <h2 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2">
+                <i class="fa-solid fa-user-pen text-amber-500"></i> Player Profiles
+            </h2>
+
+            <!-- Player 1 Profile -->
+            <div class="space-y-1">
+                <label class="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
+                    <span>White Player Name</span>
+                    <i class="fa-solid fa-circle text-[8px] text-slate-200"></i>
+                </label>
+                <input type="text" id="input-p1-name" value="Grandmaster White" placeholder="Player 1 Name" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-amber-300 focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all">
+            </div>
+
+            <!-- Player 2 / AI Profile -->
+            <div class="space-y-1">
+                <label class="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
+                    <span>Black Player / AI Name</span>
+                    <i class="fa-solid fa-circle text-[8px] text-slate-900"></i>
+                </label>
+                <input type="text" id="input-p2-name" value="StockBot AI" placeholder="Player 2 Name" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-300 focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all">
+            </div>
+
+            <h2 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2 pt-2">
+                <i class="fa-solid fa-palette text-amber-500"></i> Board & Piece Props
+            </h2>
+
+            <!-- Props Style Switcher -->
+            <div class="space-y-1">
+                <label for="prop-style" class="text-[11px] font-semibold text-slate-300">Chess Piece Prop Set</label>
+                <select id="prop-style" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-200 focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all">
+                    <option value="classic">Classic Wooden Staunton</option>
+                    <option value="glass">Glass & Marble</option>
+                    <option value="flat">Minimalist Flat</option>
+                </select>
+            </div>
+
+            <!-- Board Theme Switcher -->
+            <div class="space-y-1">
+                <label for="board-theme" class="text-[11px] font-semibold text-slate-300">Board Theme</label>
+                <select id="board-theme" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-200 focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all">
+                    <option value="theme-classic">Classic Mahogany</option>
+                    <option value="theme-onyx">Midnight Onyx</option>
+                    <option value="theme-minimal">Minimal Slate</option>
+                    <option value="theme-emerald">Emerald Forest</option>
+                </select>
+            </div>
+
+            <h2 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-2 pt-2">
+                <i class="fa-solid fa-gamepad text-amber-500"></i> Game Mechanics
+            </h2>
+
+            <!-- AI Level & Mode -->
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label for="game-mode" class="text-[11px] font-semibold text-slate-300">Opponent</label>
+                    <select id="game-mode" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 text-xs font-medium text-slate-200 focus:outline-none">
+                        <option value="ai">AI Bot</option>
+                        <option value="pvp">Pass & Play</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="ai-level" class="text-[11px] font-semibold text-slate-300">AI Level</label>
+                    <select id="ai-level" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-2 py-2 text-xs font-medium text-slate-200 focus:outline-none">
+                        <option value="1">Casual</option>
+                        <option value="2" selected>Medium</option>
+                        <option value="3">Hard</option>
+                        <option value="4">Master</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Time Control -->
+            <div class="space-y-1">
+                <label for="time-control" class="text-[11px] font-semibold text-slate-300">Timer Speed</label>
+                <select id="time-control" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-medium text-slate-200 focus:outline-none">
+                    <option value="0">Unlimited Time</option>
+                    <option value="180">3 Min Blitz</option>
+                    <option value="300" selected>5 Min Rapid</option>
+                    <option value="600">10 Min Standard</option>
+                </select>
+            </div>
+
+            <!-- UCI Sequence Input -->
+            <div class="space-y-1 pt-1">
+                <label class="text-[11px] font-semibold text-slate-300 flex justify-between">
+                    <span>Load Position / Moves (UCI)</span>
+                    <span class="text-[10px] text-amber-400 font-mono">e.g. e2e4 e7e5</span>
+                </label>
+                <div class="flex gap-2">
+                    <input type="text" id="uci-input" placeholder="e.g. e2e4 g1f3 or e7e8q" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none text-amber-200">
+                    <button id="btn-load-uci" class="px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition-all shrink-0">Load</button>
+                </div>
+                <p id="uci-error" class="text-[10px] text-red-400 hidden mt-1">Invalid UCI move sequence.</p>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex flex-col gap-2 pt-2">
+                <button id="btn-restart" class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold py-2.5 rounded-xl shadow-lg shadow-amber-500/20 transition-all text-xs flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-play"></i> Start New Match
+                </button>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="btn-draw" class="bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium py-2 rounded-xl border border-slate-800 transition-colors">Offer Draw</button>
+                    <button id="btn-resign" class="bg-red-950/40 hover:bg-red-900/50 text-red-400 text-xs font-medium py-2 rounded-xl border border-red-900/50 transition-colors">Resign Match</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Center Column: Evaluation & Chess Board -->
+        <section class="flex-1 flex flex-col items-center w-full max-w-[580px] order-1 lg:order-2">
+            
+            <!-- Top Player Profile Box -->
+            <div id="top-player-box" class="w-full glass-panel rounded-t-2xl p-3 flex items-center justify-between mb-1 shadow-lg">
+                <div class="flex items-center gap-3">
+                    <div id="top-p-avatar" class="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-400 text-xl shadow">
+                        <i id="top-p-icon" class="fa-solid fa-robot"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span id="display-top-name" class="font-bold text-xs sm:text-sm text-slate-100">StockBot AI</span>
+                            <span id="top-p-badge" class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-800 text-slate-400 uppercase">Black</span>
+                        </div>
+                        <div id="top-p-captured" class="flex items-center gap-0.5 text-xs h-4 mt-0.5"></div>
+                    </div>
+                </div>
+                <div id="top-p-clock" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 code-font text-base font-bold text-slate-300 min-w-[75px] text-center shadow-inner">
+                    05:00
+                </div>
+            </div>
+
+            <!-- Board Area with Engine Evaluation Bar -->
+            <div class="relative w-full flex gap-2 items-stretch">
+                <!-- Evaluation Bar -->
+                <div class="w-3.5 bg-slate-900 rounded-xl overflow-hidden border border-slate-800 flex flex-col justify-end relative shadow-inner shrink-0" title="Engine Evaluation">
+                    <div id="eval-bar-white" class="bg-slate-100 w-full eval-bar-fill" style="height: 50%;"></div>
+                    <span id="eval-score" class="absolute inset-0 flex items-center justify-center text-[8px] font-bold code-font text-slate-900 mix-blend-difference">0.0</span>
+                </div>
+
+                <!-- Interactive Chessboard -->
+                <div id="board-container" class="relative flex-1 aspect-square rounded-2xl overflow-hidden shadow-2xl border-2 border-slate-800 bg-slate-900">
+                    <div id="chessboard" class="w-full h-full grid grid-cols-8 grid-rows-8">
+                        <!-- Squares render dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Player Profile Box -->
+            <div id="bottom-player-box" class="w-full glass-panel rounded-b-2xl p-3 flex items-center justify-between mt-1 shadow-lg">
+                <div class="flex items-center gap-3">
+                    <div id="bottom-p-avatar" class="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-xl shadow">
+                        <i id="bottom-p-icon" class="fa-solid fa-user-check"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span id="display-bottom-name" class="font-bold text-xs sm:text-sm text-slate-100">Grandmaster White</span>
+                            <span id="bottom-p-badge" class="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-400 uppercase">White</span>
+                        </div>
+                        <div id="bottom-p-captured" class="flex items-center gap-0.5 text-xs h-4 mt-0.5"></div>
+                    </div>
+                </div>
+                <div id="bottom-p-clock" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 code-font text-base font-bold text-amber-400 min-w-[75px] text-center shadow-inner">
+                    05:00
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Column: Move Record & Match Analytics -->
+        <aside class="w-full lg:w-80 glass-panel rounded-2xl p-4 flex flex-col h-[560px] shadow-2xl order-3">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+                <h2 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-list-ol text-amber-500"></i> Match History
+                </h2>
+                <div class="flex items-center gap-2">
+                    <button id="toggle-notation" class="text-[10px] bg-slate-900 hover:bg-slate-800 text-slate-300 px-2 py-1 rounded-lg border border-slate-800 font-mono transition-colors">
+                        SAN / UCI
+                    </button>
+                    <div id="game-status-badge" class="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        White Turn
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto pr-1">
+                <table class="w-full text-left text-xs code-font">
+                    <thead class="text-slate-500 uppercase sticky top-0 bg-slate-900/90 backdrop-blur-md pb-2 border-b border-slate-800">
+                        <tr>
+                            <th class="py-1.5 w-10 text-slate-600">#</th>
+                            <th class="py-1.5 w-1/2 text-slate-300">White</th>
+                            <th class="py-1.5 w-1/2 text-slate-300">Black</th>
+                        </tr>
+                    </thead>
+                    <tbody id="move-history-body" class="divide-y divide-slate-800/40"></tbody>
+                </table>
+            </div>
+
+            <div class="pt-3 border-t border-slate-800 mt-2 flex justify-between items-center text-xs">
+                <button id="btn-copy-fen" class="text-slate-400 hover:text-amber-400 transition-colors flex items-center gap-1.5 code-font text-[11px]">
+                    <i class="fa-regular fa-copy"></i> Export FEN
+                </button>
+                <span id="fen-copied-toast" class="text-emerald-400 text-[11px] opacity-0 transition-opacity">Copied!</span>
+            </div>
+        </aside>
+    </main>
+
+    <!-- Deployment Modal -->
+    <div id="deploy-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 max-w-2xl w-full rounded-2xl p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+                <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-rocket text-emerald-400"></i> Deployment Instructions
+                </h2>
+                <button id="btn-close-deploy" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <div class="space-y-4 text-xs sm:text-sm text-slate-300 leading-relaxed">
+                <p>This application is completely self-contained in a single static HTML file. You can deploy it for free within minutes:</p>
+                
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                    <h3 class="text-amber-400 font-bold mb-1">Method 1: GitHub Pages</h3>
+                    <ol class="list-decimal list-inside space-y-1 text-xs text-slate-400">
+                        <li>Save this file as <code class="text-slate-200 font-mono">index.html</code>.</li>
+                        <li>Upload it to a GitHub Repository.</li>
+                        <li>Go to <b>Settings &gt; Pages</b> and choose your main branch.</li>
+                    </ol>
+                </div>
+
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                    <h3 class="text-emerald-400 font-bold mb-1">Method 2: Vercel / Netlify Drag & Drop</h3>
+                    <ol class="list-decimal list-inside space-y-1 text-xs text-slate-400">
+                        <li>Put <code class="text-slate-200 font-mono">index.html</code> inside an empty folder.</li>
+                        <li>Drag and drop the folder into your Netlify or Vercel dashboard.</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-slate-800 text-right">
+                <button id="btn-deploy-ok" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rules, Notation & Interactive Preview Modal -->
+    <div id="help-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-3 sm:p-5">
+        <div class="bg-slate-900 border border-slate-800 max-w-4xl w-full rounded-2xl p-5 sm:p-6 shadow-2xl overflow-y-auto max-h-[92vh] text-xs sm:text-sm text-slate-300">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                <h2 class="text-lg font-bold text-amber-400 flex items-center gap-2 brand-font">
+                    <i class="fa-solid fa-book-open text-amber-500"></i> Comprehensive Chess Rules, Notation & Live Preview
+                </h2>
+                <button id="btn-close-help" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+
+            <!-- Tab Buttons -->
+            <div class="flex gap-2 border-b border-slate-800 pb-3 mb-4">
+                <button id="tab-btn-notation" class="px-4 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs">Notation System</button>
+                <button id="tab-btn-rules" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs">Full Chess Rules</button>
+                <button id="tab-btn-preview" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs">Interactive Notation Board</button>
+            </div>
+
+            <!-- Tab 1: Notation -->
+            <div id="tab-content-notation" class="space-y-4">
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                    <h3 class="text-amber-400 font-bold text-sm">1. Standard Algebraic Notation (SAN)</h3>
+                    <p>SAN is the standard human-readable notation used in tournaments and books. It identifies pieces by single uppercase letters:</p>
+                    <ul class="list-disc list-inside space-y-1 text-xs text-slate-400 pl-2">
+                        <li><b class="text-slate-200">K</b> = King, <b class="text-slate-200">Q</b> = Queen, <b class="text-slate-200">R</b> = Rook, <b class="text-slate-200">B</b> = Bishop, <b class="text-slate-200">N</b> = Knight (Pawns have no piece letter).</li>
+                        <li><code class="text-amber-300 font-mono">e4</code>: Move pawn to e4.</li>
+                        <li><code class="text-amber-300 font-mono">Nf3</code>: Move Knight to f3.</li>
+                        <li><code class="text-amber-300 font-mono">exd5</code>: Pawn on e-file captures piece on d5.</li>
+                        <li><code class="text-amber-300 font-mono">Nxd4</code>: Knight captures piece on d4.</li>
+                        <li><code class="text-amber-300 font-mono">O-O</code>: Kingside Castling / <code class="text-amber-300 font-mono">O-O-O</code>: Queenside Castling.</li>
+                        <li><code class="text-amber-300 font-mono">e8=Q</code>: Pawn promotion to Queen.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                    <h3 class="text-emerald-400 font-bold text-sm">2. Universal Chess Interface Notation (UCI)</h3>
+                    <p>UCI is the standard computer coordinate notation. It directly specifies starting square and destination square without piece initials:</p>
+                    <ul class="list-disc list-inside space-y-1 text-xs text-slate-400 pl-2">
+                        <li><code class="text-emerald-300 font-mono">e2e4</code>: Move piece from e2 to e4.</li>
+                        <li><code class="text-emerald-300 font-mono">g1f3</code>: Move piece from g1 to f3.</li>
+                        <li><code class="text-emerald-300 font-mono">e7e8q</code>: Move pawn from e7 to e8 and promote to Queen.</li>
+                        <li><code class="text-emerald-300 font-mono">e1g1</code>: Kingside castling (King moves from e1 to g1).</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Tab 2: Full Rules -->
+            <div id="tab-content-rules" class="space-y-3 hidden">
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                    <h4 class="text-amber-400 font-bold">Piece Movement Rules</h4>
+                    <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+                        <b>King:</b> Moves 1 square in any direction.<br>
+                        <b>Queen:</b> Moves any number of squares along ranks, files, or diagonals.<br>
+                        <b>Rook:</b> Moves any number of squares horizontally or vertically.<br>
+                        <b>Bishop:</b> Moves any number of squares diagonally.<br>
+                        <b>Knight:</b> Moves in an "L-shape" (2 squares in one direction, 1 square perpendicular); can jump over pieces.<br>
+                        <b>Pawn:</b> Moves 1 square forward (or 2 squares from starting rank); captures 1 square diagonally forward.
+                    </p>
+                </div>
+
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                    <h4 class="text-amber-400 font-bold">Special Rules</h4>
+                    <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+                        <b>Castling:</b> King moves 2 squares towards a Rook, and the Rook hops over to the adjacent square. Allowed if neither piece has moved, all intermediate squares are clear, and the King is not in check or passing through check.<br>
+                        <b>En Passant:</b> If an opponent moves a pawn 2 squares forward landing beside your pawn, you may capture it diagonally as if it had advanced only 1 square.<br>
+                        <b>Pawn Promotion:</b> When a pawn reaches the 8th rank, it must immediately be promoted to a Queen, Rook, Bishop, or Knight.
+                    </p>
+                </div>
+
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                    <h4 class="text-amber-400 font-bold">Endgame & Draw Conditions</h4>
+                    <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+                        <b>Checkmate:</b> The King is attacked and has no legal moves to escape.<br>
+                        <b>Stalemate:</b> The active player is not in check but has zero legal moves left (results in a draw).<br>
+                        <b>50-Move Rule & 3-Fold Repetition:</b> Draw triggered if 50 consecutive moves occur without pawn moves/captures, or if identical board state repeats 3 times.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Tab 3: Interactive Preview -->
+            <div id="tab-content-preview" class="space-y-4 hidden">
+                <p class="text-xs text-slate-400">Click any two squares on the preview board below to generate and test move notation preview:</p>
+                <div class="flex flex-col sm:flex-row gap-4 items-center">
+                    <div class="w-64 h-64 bg-slate-950 rounded-xl overflow-hidden border border-slate-800 p-1">
+                        <div id="preview-chessboard" class="w-full h-full grid grid-cols-8 grid-rows-8 text-[9px] font-mono"></div>
+                    </div>
+                    <div class="flex-1 bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                        <div>
+                            <span class="text-slate-400 text-xs">Selected Squares:</span>
+                            <div id="preview-sq-display" class="font-mono text-amber-400 font-bold text-sm">None</div>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 text-xs">SAN Notation Translation:</span>
+                            <div id="preview-san-display" class="font-mono text-slate-200 font-bold text-sm">-</div>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 text-xs">UCI Notation Translation:</span>
+                            <div id="preview-uci-display" class="font-mono text-emerald-400 font-bold text-sm">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-slate-800 text-right">
+                <button id="btn-help-ok" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs">Close Guide</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="game-over-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 max-w-sm w-full rounded-2xl p-6 shadow-2xl text-center">
+            <div id="modal-icon" class="w-14 h-14 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-2xl mx-auto mb-3 border border-amber-500/40">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            <h2 id="modal-title" class="text-lg font-bold text-white mb-1">Match Finished</h2>
+            <p id="modal-description" class="text-xs text-slate-400 mb-5">White won by Checkmate.</p>
+            <button id="modal-restart-btn" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs shadow-lg">Play New Game</button>
+        </div>
+    </div>
+
+    <!-- Audio & AI Logic Engine -->
+    <script>
+        class AudioEngine {
+            constructor() { this.ctx = null; this.enabled = true; }
+            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+            play(type) {
+                if (!this.enabled) return;
+                this.init();
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain); gain.connect(this.ctx.destination);
+
+                if (type === 'move') {
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(320, now);
+                    osc.frequency.exponentialRampToValueAtTime(160, now + 0.08);
+                    gain.gain.setValueAtTime(0.25, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                    osc.start(now); osc.stop(now + 0.08);
+                } else if (type === 'capture') {
+                    osc.type = 'triangle'; osc.frequency.setValueAtTime(580, now);
+                    osc.frequency.exponentialRampToValueAtTime(180, now + 0.12);
+                    gain.gain.setValueAtTime(0.35, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                    osc.start(now); osc.stop(now + 0.12);
+                } else if (type === 'check') {
+                    osc.type = 'square'; osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.setValueAtTime(880, now + 0.1);
+                    gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                    osc.start(now); osc.stop(now + 0.2);
+                }
+            }
+        }
+
+        class EvaluationEngine {
+            constructor() {
+                this.weights = { p: 10, n: 30, b: 35, r: 50, q: 90, k: 1000 };
+            }
+            evaluateBoard(game) {
+                let total = 0;
+                const board = game.board();
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        const piece = board[r][c];
+                        if (piece) {
+                            const val = this.weights[piece.type];
+                            total += piece.color === 'w' ? val : -val;
+                        }
+                    }
+                }
+                return total;
+            }
+            minimax(game, depth, alpha, beta, isMax) {
+                if (depth === 0 || game.game_over()) return { score: this.evaluateBoard(game) };
+                const moves = game.moves({ verbose: true });
+                let bestMove = null;
+                if (isMax) {
+                    let maxEval = -Infinity;
+                    for (const move of moves) {
+                        game.move(move);
+                        const ev = this.minimax(game, depth - 1, alpha, beta, false).score;
+                        game.undo();
+                        if (ev > maxEval) { maxEval = ev; bestMove = move; }
+                        alpha = Math.max(alpha, ev);
+                        if (beta <= alpha) break;
+                    }
+                    return { score: maxEval, move: bestMove };
+                } else {
+                    let minEval = Infinity;
+                    for (const move of moves) {
+                        game.move(move);
+                        const ev = this.minimax(game, depth - 1, alpha, beta, true).score;
+                        game.undo();
+                        if (ev < minEval) { minEval = ev; bestMove = move; }
+                        beta = Math.min(beta, ev);
+                        if (beta <= alpha) break;
+                    }
+                    return { score: minEval, move: bestMove };
+                }
+            }
+            getBestMove(game, depth) {
+                return this.minimax(game, depth, -Infinity, Infinity, game.turn() === 'w').move;
+            }
+        }
+
+        class ChessMasterStudioApp {
+            constructor() {
+                this.game = new Chess();
+                this.engine = new EvaluationEngine();
+                this.sound = new AudioEngine();
+
+                this.propStyle = 'classic';
+                this.isFlipped = false;
+                this.selectedSquare = null;
+                this.legalMoves = [];
+                this.useUCI = false;
+                this.timeControl = 300;
+                this.whiteTime = 300;
+                this.blackTime = 300;
+                this.timerInterval = null;
+                this.isGameOver = false;
+
+                // Interactive Preview State
+                this.previewSq1 = null;
+                this.previewSq2 = null;
+
+                this.initPieceStyles();
+                this.initDOM();
+                this.bindEvents();
+                this.resetGame();
+                this.initPreviewBoard();
+            }
+
+            initPieceStyles() {
+                // Staunton Pieces
+                const classic = {
+                    'w_p': '<svg viewBox="0 0 45 45"><path d="M22.5 9c-2.21 0-4 1.79-4 4 0 0.89 0.29 1.71 0.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03 0.94 3.84 2.41 5.03C15.41 27.09 11 31.58 11 37.5h23c0-5.92-4.41-10.41-7.41-11.47C28.06 24.84 29 23.03 29 21c0-2.41-1.33-4.5-3.28-5.62 0.49-0.67 0.78-1.49 0.78-2.38 0-2.21-1.79-4-4-4z" fill="#fff" stroke="#475569" stroke-width="1.5"/></svg>',
+                    'w_r': '<svg viewBox="0 0 45 45"><g fill="#fff" stroke="#475569" stroke-width="1.5"><path d="M9 39h27v-3H9v3zM12 36v-4h21v4H12zM11 32l2.5-4h18l2.5 4h-23zM12 28h21v-8H12v8zM14 20l-1-3h19l-1 3H14zM11 17V9h4v2h5V9h5v2h5V9h4v8H11z"/></g></svg>',
+                    'w_n': '<svg viewBox="0 0 45 45"><g fill="none" stroke="#475569" stroke-width="1.5"><path d="M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21" fill="#fff"/><circle cx="15" cy="15" r="1.5" fill="#475569"/></g></svg>',
+                    'w_b': '<svg viewBox="0 0 45 45"><g fill="none" stroke="#475569" stroke-width="1.5"><g fill="#fff"><path d="M9 36c1.24-2.59 6.01-2.5 13.5-2.5 7.5 0 12.26-.09 13.5 2.5 1 1 1 1.5 1 2H8c0-.5 0-1 1-2z"/><path d="M17.5 26h10c.5-2 1.5-3.5 1.5-6 0-3-2.5-6-6.5-6s-6.5 3-6.5 6c0 2.5 1 4 1.5 6z"/></g></g></svg>',
+                    'w_q': '<svg viewBox="0 0 45 45"><g fill="none" stroke="#475569" stroke-width="1.5"><path d="M8 36c1.5-2.5 6-2.5 14.5-2.5s13 0 14.5 2.5c1 1 1 1.5 1 2H7c0-.5 0-1 1-2z" fill="#fff"/><path d="M12 25l-2.5-10 7 6 6-10.5 6 10.5 7-6L33 25H12z" fill="#fff"/></g></svg>',
+                    'w_k': '<svg viewBox="0 0 45 45"><g fill="none" stroke="#475569" stroke-width="1.5"><path d="M22.5 25c-4 0-7.5 1.5-10.5 4.5 0 2.5 0 5 2.5 7.5h16c2.5-2.5 2.5-5 2.5-7.5-3-3-6.5-4.5-10.5-4.5z" fill="#fff"/></g></svg>',
+                    'b_p': '<svg viewBox="0 0 45 45"><path d="M22.5 9c-2.21 0-4 1.79-4 4 0 0.89 0.29 1.71 0.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03 0.94 3.84 2.41 5.03C15.41 27.09 11 31.58 11 37.5h23c0-5.92-4.41-10.41-7.41-11.47C28.06 24.84 29 23.03 29 21c0-2.41-1.33-4.5-3.28-5.62 0.49-0.67 0.78-1.49 0.78-2.38 0-2.21-1.79-4-4-4z" fill="#334155" stroke="#000" stroke-width="1.5"/></svg>',
+                    'b_r': '<svg viewBox="0 0 45 45"><g fill="#334155" stroke="#000" stroke-width="1.5"><path d="M9 39h27v-3H9v3zM12 36v-4h21v4H12zM11 32l2.5-4h18l2.5 4h-23zM12 28h21v-8H12v8zM14 20l-1-3h19l-1 3H14zM11 17V9h4v2h5V9h5v2h5V9h4v8H11z"/></g></svg>',
+                    'b_n': '<svg viewBox="0 0 45 45"><g fill="none" stroke="#000" stroke-width="1.5"><path d="M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21" fill="#334155"/><circle cx="15" cy="15" r="1.5" fill="#fff"/></g></svg>',
+                    'b_b': '<svg viewBox="0 0 45 45"><g fill="none" stroke="#000" stroke-width="1.5"><g fill="#334155"><path d="M9 36c1.24-2.59 6.01-2.5 13.5-2.5 7.5 0 12.26-.09 13.5 2.5 1 1 1 1.5 1 2H8c0-.5 0-1 1-2z"/><path d="M17.5 26h10c.5-2 1.5-3.5 1.5-6 0-3-2.5-6-6.5-6s-6.5 3-6.5 6c0 2.5 1 4 1.5 6z"/></g></g></svg>',
+                    'b_q': '<svg viewBox="0 0 45 45"><g fill="none" stroke="#000" stroke-width="1.5"><path d="M8 36c1.5-2.5 6-2.5 14.5-2.5s13 0 14.5 2.5c1 1 1 1.5 1 2H7c0-.5 0-1 1-2z" fill="#334155"/><path d="M12 25l-2.5-10 7 6 6-10.5 6 10.5 7-6L33 25H12z" fill="#334155"/></g></svg>',
+                    'b_k': '<svg viewBox="0 0 45 45"><g fill="none" stroke="#000" stroke-width="1.5"><path d="M22.5 25c-4 0-7.5 1.5-10.5 4.5 0 2.5 0 5 2.5 7.5h16c2.5-2.5 2.5-5 2.5-7.5-3-3-6.5-4.5-10.5-4.5z" fill="#334155"/></g></svg>'
+                };
+
+                // Glass & Marble Pieces
+                const glass = {
+                    'w_p': '<svg viewBox="0 0 45 45"><circle cx="22.5" cy="22.5" r="15" fill="rgba(255,255,255,0.85)" stroke="#38bdf8" stroke-width="2.5"/><text x="22.5" y="28" font-size="15" font-weight="bold" fill="#0f172a" text-anchor="middle">♟</text></svg>',
+                    'w_r': '<svg viewBox="0 0 45 45"><circle cx="22.5" cy="22.5" r="15" fill="rgba(255,255,255,0.85)" stroke="#38bdf8" stroke-width="2.5"/><text x="22.5" y="28" font-size="16" font-weight="bold" fill="#0f172a" text-anchor="middle">♜</text></svg>',
+                    'w_n': '<svg viewBox="0 0 45 45"><circle cx="22.5" cy="22.5" r="15" fill="rgba(255,255,255,0.85)" stroke="#38bdf8" stroke-width="2.5"/><text x="22.5" y="28" font-size="16" font-weight="bold" fill="#0f172a" text-anchor="middle">♞</text></svg>',
+                    'w_b': '<svg viewBox="0 0 45 45"><circle cx="22.5" cy="22.5" r="15" fill="rgba(255,255,255,0.85)" stroke="#38bdf8" stroke-width="2.5"/><text x="22.5" y="28" font-size="16" font-weight="bold" fill="#0f172a" text-anchor="middle">♝</text></svg>',
+                    'w_q': '<svg viewBox="0 0 45 45"><circle cx="22.5" cy="22.5" r="16" fill="rgba(255,255,255,0.95)" stroke="#38bdf8" stroke-width="3"/><text x="22.5" y="29" font-size="18" font-weight="bold" fill="#0f172a" text-anchor="middle">♛</text></svg>',
+                    'w_k': '<svg viewBox="0 0 45 45"><circle cx="22.5" cy="22.5" r="16" fill="rgba(255,255,255,0.95)" stroke="#fbbf24" stroke-width="3"/><text x="22.5" y="29" font-size="18" font-weight="bold" fill="#0f172a" text-anchor="middle">♚</text></svg>',
+                    'b_p': '<svg viewBox="0 0 45 45"><circle cx="22.5" cy="22.5" r="15" fill="rgba(15,23,42,0.9)" stroke="#94a3b8" stroke-width="2.5"/><text x="22.5" y="28" font-size="15" font-weight="bold" fill="#e2e8f0" text-anchor="middle">♟</text></svg>',
+                    'b_r': '<svg viewBox="0 0 45 45"><circle cx="22.5" cy="22.5" r="15" fill="rgba(15,23,42,0.9)" stroke="#94a3b8" stroke-width="2.5"/><text x="22.5" y="28" font-size="16" font-weight="bold" fill="#e2e8f0" text-anchor="middle">♜</text></svg>',
+                    'b_n': '<svg viewBox="0 0 45 45"><circle cx="22.5" cy="22.5" r="15" fill="rgba(15,23,42,0.9)" stroke="#94a3b8" stroke-width="2.5"/><text x="22.5" y="28" font-size="16" font-weight="bold" fill="#e2e8f0" text-anchor="middle">♞</text></svg>',
+                    'b_b': '<svg viewBox="0 0 45 45"><circle cx="22.5" cy="22.5" r="15" fill="rgba(15,23,42,0.9)" stroke="#94a3b8" stroke-width="2.5"/><text x="22.5" y="28" font-size="16" font-weight="bold" fill="#e2e8f0" text-anchor="middle">♝</text></svg>',
+                    'b_q': '<svg viewBox="0 0 45 45"><circle cx="22.5" cy="22.5" r="16" fill="rgba(15,23,42,0.95)" stroke="#94a3b8" stroke-width="3"/><text x="22.5" y="29" font-size="18" font-weight="bold" fill="#e2e8f0" text-anchor="middle">♛</text></svg>',
+                    'b_k': '<svg viewBox="0 0 45 45"><circle cx="22.5" cy="22.5" r="16" fill="rgba(15,23,42,0.95)" stroke="#f43f5e" stroke-width="3"/><text x="22.5" y="29" font-size="18" font-weight="bold" fill="#e2e8f0" text-anchor="middle">♚</text></svg>'
+                };
+
+                // Minimalist Flat Pieces
+                const flat = {
+                    'w_p': '<svg viewBox="0 0 45 45"><rect x="15" y="15" width="15" height="15" rx="3" fill="#38bdf8"/><text x="22.5" y="27" font-size="12" font-weight="bold" fill="#0f172a" text-anchor="middle">P</text></svg>',
+                    'w_r': '<svg viewBox="0 0 45 45"><rect x="11" y="11" width="23" height="23" rx="4" fill="#38bdf8"/><text x="22.5" y="28" font-size="14" font-weight="bold" fill="#0f172a" text-anchor="middle">R</text></svg>',
+                    'w_n': '<svg viewBox="0 0 45 45"><rect x="11" y="11" width="23" height="23" rx="4" fill="#38bdf8"/><text x="22.5" y="28" font-size="14" font-weight="bold" fill="#0f172a" text-anchor="middle">N</text></svg>',
+                    'w_b': '<svg viewBox="0 0 45 45"><rect x="11" y="11" width="23" height="23" rx="4" fill="#38bdf8"/><text x="22.5" y="28" font-size="14" font-weight="bold" fill="#0f172a" text-anchor="middle">B</text></svg>',
+                    'w_q': '<svg viewBox="0 0 45 45"><rect x="9" y="9" width="27" height="27" rx="6" fill="#38bdf8"/><text x="22.5" y="29" font-size="16" font-weight="bold" fill="#0f172a" text-anchor="middle">Q</text></svg>',
+                    'w_k': '<svg viewBox="0 0 45 45"><rect x="9" y="9" width="27" height="27" rx="6" fill="#fbbf24"/><text x="22.5" y="29" font-size="16" font-weight="bold" fill="#0f172a" text-anchor="middle">K</text></svg>',
+                    'b_p': '<svg viewBox="0 0 45 45"><rect x="15" y="15" width="15" height="15" rx="3" fill="#64748b"/><text x="22.5" y="27" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">P</text></svg>',
+                    'b_r': '<svg viewBox="0 0 45 45"><rect x="11" y="11" width="23" height="23" rx="4" fill="#64748b"/><text x="22.5" y="28" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">R</text></svg>',
+                    'b_n': '<svg viewBox="0 0 45 45"><rect x="11" y="11" width="23" height="23" rx="4" fill="#64748b"/><text x="22.5" y="28" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">N</text></svg>',
+                    'b_b': '<svg viewBox="0 0 45 45"><rect x="11" y="11" width="23" height="23" rx="4" fill="#64748b"/><text x="22.5" y="28" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">B</text></svg>',
+                    'b_q': '<svg viewBox="0 0 45 45"><rect x="9" y="9" width="27" height="27" rx="6" fill="#64748b"/><text x="22.5" y="29" font-size="16" font-weight="bold" fill="#fff" text-anchor="middle">Q</text></svg>',
+                    'b_k': '<svg viewBox="0 0 45 45"><rect x="9" y="9" width="27" height="27" rx="6" fill="#f43f5e"/><text x="22.5" y="29" font-size="16" font-weight="bold" fill="#fff" text-anchor="middle">K</text></svg>'
+                };
+
+                this.pieceSets = { classic, glass, flat };
+            }
+
+            initDOM() {
+                this.chessboard = document.getElementById('chessboard');
+                this.moveHistoryBody = document.getElementById('move-history-body');
+                this.evalBarWhite = document.getElementById('eval-bar-white');
+                this.evalScore = document.getElementById('eval-score');
+                
+                this.p1NameInput = document.getElementById('input-p1-name');
+                this.p2NameInput = document.getElementById('input-p2-name');
+
+                // Dynamic UI Profile Containers
+                this.topNameDisplay = document.getElementById('display-top-name');
+                this.topBadge = document.getElementById('top-p-badge');
+                this.topClock = document.getElementById('top-p-clock');
+                this.topIcon = document.getElementById('top-p-icon');
+                this.topAvatar = document.getElementById('top-p-avatar');
+
+                this.bottomNameDisplay = document.getElementById('display-bottom-name');
+                this.bottomBadge = document.getElementById('bottom-p-badge');
+                this.bottomClock = document.getElementById('bottom-p-clock');
+                this.bottomIcon = document.getElementById('bottom-p-icon');
+                this.bottomAvatar = document.getElementById('bottom-p-avatar');
+
+                this.uciInput = document.getElementById('uci-input');
+                this.uciError = document.getElementById('uci-error');
+            }
+
+            bindEvents() {
+                // Name Customization
+                this.p1NameInput.addEventListener('input', () => this.updatePlayerUI());
+                this.p2NameInput.addEventListener('input', () => this.updatePlayerUI());
+
+                // Prop Styles & Themes
+                document.getElementById('prop-style').addEventListener('change', (e) => {
+                    this.propStyle = e.target.value;
+                    this.renderBoard();
+                });
+
+                document.getElementById('board-theme').addEventListener('change', (e) => {
+                    document.body.className = `bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between antialiased ${e.target.value}`;
+                });
+
+                // Load UCI Moves or Sequence
+                const loadUciAction = () => {
+                    const raw = this.uciInput.value.trim();
+                    if (!raw) return;
+                    
+                    // Parse single move or space-separated list of UCI moves
+                    const moves = raw.split(/\s+/);
+                    let tempGame = new Chess();
+                    let valid = true;
+
+                    for (const mStr of moves) {
+                        if (mStr.length < 4) { valid = false; break; }
+                        const from = mStr.substring(0, 2);
+                        const to = mStr.substring(2, 4);
+                        const promotion = mStr.length > 4 ? mStr.substring(4, 5) : 'q';
+                        const res = tempGame.move({ from, to, promotion });
+                        if (!res) { valid = false; break; }
+                    }
+
+                    if (valid) {
+                        this.uciError.classList.add('hidden');
+                        this.game = tempGame;
+                        this.isGameOver = false;
+                        this.selectedSquare = null;
+                        this.legalMoves = [];
+                        this.renderBoard();
+                        this.updateHistory();
+                        this.updateEvalBar();
+                        this.updateStatusBadge();
+                    } else {
+                        this.uciError.classList.remove('hidden');
+                    }
+                };
+
+                document.getElementById('btn-load-uci').addEventListener('click', loadUciAction);
+                this.uciInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadUciAction(); });
+
+                // Draw Offer
+                document.getElementById('btn-draw').addEventListener('click', () => {
+                    if (this.isGameOver) return;
+                    const evalVal = this.engine.evaluateBoard(this.game);
+                    if (Math.abs(evalVal) <= 15) {
+                        this.stopTimer();
+                        this.isGameOver = true;
+                        this.showGameOver('Draw Agreed', 'Both players agreed to a draw.');
+                    } else {
+                        alert(`${this.p2NameInput.value} declined the draw offer.`);
+                    }
+                });
+
+                // Resign
+                document.getElementById('btn-resign').addEventListener('click', () => {
+                    if (this.isGameOver) return;
+                    this.stopTimer();
+                    this.isGameOver = true;
+                    const winner = this.game.turn() === 'w' ? this.p2NameInput.value : this.p1NameInput.value;
+                    this.showGameOver('Match Resigned', `${winner} wins by resignation.`);
+                });
+
+                document.getElementById('btn-restart').addEventListener('click', () => this.resetGame());
+                
+                // Flip Board AND Swap Player Names/Profiles
+                document.getElementById('btn-flip').addEventListener('click', () => { 
+                    this.isFlipped = !this.isFlipped; 
+                    this.renderBoard(); 
+                    this.updatePlayerUI();
+                });
+
+                document.getElementById('btn-sound').addEventListener('click', () => {
+                    this.sound.enabled = !this.sound.enabled;
+                    document.getElementById('sound-icon').className = this.sound.enabled ? "fa-solid fa-volume-high" : "fa-solid fa-volume-xmark text-red-400";
+                });
+
+                document.getElementById('toggle-notation').addEventListener('click', () => {
+                    this.useUCI = !this.useUCI;
+                    this.updateHistory();
+                });
+
+                // Modals
+                document.getElementById('btn-deploy-guide').addEventListener('click', () => document.getElementById('deploy-modal').classList.remove('hidden'));
+                document.getElementById('btn-close-deploy').addEventListener('click', () => document.getElementById('deploy-modal').classList.add('hidden'));
+                document.getElementById('btn-deploy-ok').addEventListener('click', () => document.getElementById('deploy-modal').classList.add('hidden'));
+
+                document.getElementById('btn-help').addEventListener('click', () => document.getElementById('help-modal').classList.remove('hidden'));
+                document.getElementById('btn-close-help').addEventListener('click', () => document.getElementById('help-modal').classList.add('hidden'));
+                document.getElementById('btn-help-ok').addEventListener('click', () => document.getElementById('help-modal').classList.add('hidden'));
+
+                // Tab switching inside Help Modal
+                const tabBtnNotation = document.getElementById('tab-btn-notation');
+                const tabBtnRules = document.getElementById('tab-btn-rules');
+                const tabBtnPreview = document.getElementById('tab-btn-preview');
+
+                const contentNotation = document.getElementById('tab-content-notation');
+                const contentRules = document.getElementById('tab-content-rules');
+                const contentPreview = document.getElementById('tab-content-preview');
+
+                const setTabActive = (activeBtn, activeContent) => {
+                    [tabBtnNotation, tabBtnRules, tabBtnPreview].forEach(btn => {
+                        btn.className = 'px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs';
+                    });
+                    [contentNotation, contentRules, contentPreview].forEach(c => c.classList.add('hidden'));
+                    activeBtn.className = 'px-4 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs';
+                    activeContent.classList.remove('hidden');
+                };
+
+                tabBtnNotation.addEventListener('click', () => setTabActive(tabBtnNotation, contentNotation));
+                tabBtnRules.addEventListener('click', () => setTabActive(tabBtnRules, contentRules));
+                tabBtnPreview.addEventListener('click', () => setTabActive(tabBtnPreview, contentPreview));
+
+                document.getElementById('modal-restart-btn').addEventListener('click', () => {
+                    document.getElementById('game-over-modal').classList.add('hidden');
+                    this.resetGame();
+                });
+
+                document.getElementById('btn-copy-fen').addEventListener('click', () => {
+                    const el = document.createElement('textarea');
+                    el.value = this.game.fen();
+                    document.body.appendChild(el); el.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(el);
+                    const toast = document.getElementById('fen-copied-toast');
+                    toast.style.opacity = '1';
+                    setTimeout(() => toast.style.opacity = '0', 2000);
+                });
+            }
+
+            resetGame() {
+                this.game.reset();
+                this.isGameOver = false;
+                this.selectedSquare = null;
+                this.legalMoves = [];
+                this.uciError.classList.add('hidden');
+                this.timeControl = parseInt(document.getElementById('time-control').value);
+                this.whiteTime = this.timeControl;
+                this.blackTime = this.timeControl;
+                this.stopTimer();
+                this.updatePlayerUI();
+                this.updateClockDisplay();
+                this.renderBoard();
+                this.updateHistory();
+                this.updateEvalBar();
+                this.updateStatusBadge();
+            }
+
+            updatePlayerUI() {
+                const p1Name = this.p1NameInput.value || 'Grandmaster White';
+                const p2Name = this.p2NameInput.value || 'StockBot AI';
+                const isAI = document.getElementById('game-mode').value === 'ai';
+
+                if (!this.isFlipped) {
+                    this.topNameDisplay.textContent = p2Name;
+                    this.topBadge.textContent = 'Black';
+                    this.topBadge.className = 'px-2 py-0.5 rounded text-[9px] font-bold bg-slate-800 text-slate-400 uppercase';
+                    this.topIcon.className = isAI ? 'fa-solid fa-robot' : 'fa-solid fa-user';
+                    this.topAvatar.className = 'w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xl shadow';
+
+                    this.bottomNameDisplay.textContent = p1Name;
+                    this.bottomBadge.textContent = 'White';
+                    this.bottomBadge.className = 'px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-400 uppercase';
+                    this.bottomIcon.className = 'fa-solid fa-user-check';
+                    this.bottomAvatar.className = 'w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-xl shadow';
+                } else {
+                    this.topNameDisplay.textContent = p1Name;
+                    this.topBadge.textContent = 'White';
+                    this.topBadge.className = 'px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-400 uppercase';
+                    this.topIcon.className = 'fa-solid fa-user-check';
+                    this.topAvatar.className = 'w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-xl shadow';
+
+                    this.bottomNameDisplay.textContent = p2Name;
+                    this.bottomBadge.textContent = 'Black';
+                    this.bottomBadge.className = 'px-2 py-0.5 rounded text-[9px] font-bold bg-slate-800 text-slate-400 uppercase';
+                    this.bottomIcon.className = isAI ? 'fa-solid fa-robot' : 'fa-solid fa-user';
+                    this.bottomAvatar.className = 'w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xl shadow';
+                }
+                this.updateClockDisplay();
+            }
+
+            startTimer() {
+                if (this.timeControl === 0 || this.timerInterval || this.isGameOver) return;
+                this.timerInterval = setInterval(() => {
+                    if (this.game.turn() === 'w') {
+                        this.whiteTime--;
+                        if (this.whiteTime <= 0) {
+                            this.stopTimer();
+                            this.isGameOver = true;
+                            this.showGameOver('Time Out', `${this.p2NameInput.value} won on time.`);
+                        }
+                    } else {
+                        this.blackTime--;
+                        if (this.blackTime <= 0) {
+                            this.stopTimer();
+                            this.isGameOver = true;
+                            this.showGameOver('Time Out', `${this.p1NameInput.value} won on time.`);
+                        }
+                    }
+                    this.updateClockDisplay();
+                }, 1000);
+            }
+
+            stopTimer() { clearInterval(this.timerInterval); this.timerInterval = null; }
+
+            updateClockDisplay() {
+                const fmt = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+                
+                if (!this.isFlipped) {
+                    this.topClock.textContent = fmt(this.blackTime);
+                    this.topClock.className = `bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 code-font text-base font-bold min-w-[75px] text-center shadow-inner ${this.game.turn() === 'b' ? 'text-amber-400 border-amber-500/50' : 'text-slate-400'}`;
+
+                    this.bottomClock.textContent = fmt(this.whiteTime);
+                    this.bottomClock.className = `bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 code-font text-base font-bold min-w-[75px] text-center shadow-inner ${this.game.turn() === 'w' ? 'text-amber-400 border-amber-500/50' : 'text-slate-400'}`;
+                } else {
+                    this.topClock.textContent = fmt(this.whiteTime);
+                    this.topClock.className = `bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 code-font text-base font-bold min-w-[75px] text-center shadow-inner ${this.game.turn() === 'w' ? 'text-amber-400 border-amber-500/50' : 'text-slate-400'}`;
+
+                    this.bottomClock.textContent = fmt(this.blackTime);
+                    this.bottomClock.className = `bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 code-font text-base font-bold min-w-[75px] text-center shadow-inner ${this.game.turn() === 'b' ? 'text-amber-400 border-amber-500/50' : 'text-slate-400'}`;
+                }
+            }
+
+            updateStatusBadge() {
+                const badge = document.getElementById('game-status-badge');
+                if (this.game.in_checkmate()) {
+                    badge.textContent = 'Checkmate';
+                    badge.className = 'px-2.5 py-1 rounded-full text-[10px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20';
+                } else if (this.game.in_draw()) {
+                    badge.textContent = 'Draw';
+                    badge.className = 'px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20';
+                } else {
+                    const turnStr = this.game.turn() === 'w' ? 'White Turn' : 'Black Turn';
+                    badge.textContent = turnStr;
+                    badge.className = 'px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+                }
+            }
+
+            renderBoard() {
+                this.chessboard.innerHTML = '';
+                const files = ['a','b','c','d','e','f','g','h'];
+                const ranks = ['8','7','6','5','4','3','2','1'];
+
+                const rIdx = this.isFlipped ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+                const cIdx = this.isFlipped ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+
+                const activeSet = this.pieceSets[this.propStyle] || this.pieceSets.classic;
+
+                rIdx.forEach((r) => {
+                    cIdx.forEach((c) => {
+                        const sq = `${files[c]}${ranks[r]}`;
+                        const piece = this.game.get(sq);
+                        const sqEl = document.createElement('div');
+                        
+                        let sqClass = (r + c) % 2 === 0 ? 'square-light' : 'square-dark';
+                        if (this.selectedSquare === sq) sqClass += ' square-selected';
+
+                        sqEl.className = `relative flex items-center justify-center ${sqClass}`;
+                        sqEl.addEventListener('click', () => this.handleSquareClick(sq));
+
+                        sqEl.addEventListener('dragover', (e) => e.preventDefault());
+                        sqEl.addEventListener('drop', (e) => {
+                            e.preventDefault();
+                            this.attemptMove(e.dataTransfer.getData('text/plain'), sq);
+                        });
+
+                        if (piece) {
+                            const pEl = document.createElement('div');
+                            pEl.className = 'chess-piece w-[85%] h-[85%] flex items-center justify-center';
+                            pEl.innerHTML = activeSet[`${piece.color}_${piece.type}`];
+                            pEl.draggable = (piece.color === this.game.turn() && !this.isGameOver);
+                            pEl.addEventListener('dragstart', (e) => {
+                                if (this.isGameOver) return;
+                                e.dataTransfer.setData('text/plain', sq);
+                                this.selectedSquare = sq;
+                                this.legalMoves = this.game.moves({ square: sq, verbose: true });
+                                this.renderBoard();
+                            });
+                            sqEl.appendChild(pEl);
+                        }
+
+                        const mOpt = this.legalMoves.find(m => m.to === sq);
+                        if (mOpt) {
+                            const ind = document.createElement('div');
+                            ind.className = mOpt.captured ? 'capture-indicator' : 'move-indicator';
+                            sqEl.appendChild(ind);
+                        }
+
+                        this.chessboard.appendChild(sqEl);
+                    });
+                });
+            }
+
+            handleSquareClick(sq) {
+                if (this.game.game_over() || this.isGameOver) return;
+
+                if (this.selectedSquare) {
+                    if (this.selectedSquare === sq) {
+                        this.selectedSquare = null; this.legalMoves = []; this.renderBoard(); return;
+                    }
+                    if (this.legalMoves.some(m => m.to === sq)) {
+                        this.attemptMove(this.selectedSquare, sq); return;
+                    }
+                }
+
+                const piece = this.game.get(sq);
+                if (piece && piece.color === this.game.turn()) {
+                    this.selectedSquare = sq;
+                    this.legalMoves = this.game.moves({ square: sq, verbose: true });
+                } else {
+                    this.selectedSquare = null; this.legalMoves = [];
+                }
+                this.renderBoard();
+            }
+
+            attemptMove(from, to) {
+                if (this.isGameOver) return;
+                const moveConfig = { from, to, promotion: 'q' };
+                const res = this.game.move(moveConfig);
+                if (!res) return;
+
+                this.selectedSquare = null; this.legalMoves = [];
+                if (res.captured) this.sound.play('capture'); else this.sound.play('move');
+
+                this.startTimer();
+                this.renderBoard();
+                this.updateHistory();
+                this.updateEvalBar();
+                this.updateClockDisplay();
+                this.updateStatusBadge();
+
+                if (this.game.game_over()) {
+                    this.stopTimer();
+                    this.isGameOver = true;
+                    if (this.game.in_checkmate()) {
+                        const winner = this.game.turn() === 'w' ? this.p2NameInput.value : this.p1NameInput.value;
+                        this.showGameOver('Checkmate!', `${winner} wins by checkmate.`);
+                    } else {
+                        this.showGameOver('Game Drawn', 'Match ended in a draw.');
+                    }
+                    return;
+                }
+
+                const mode = document.getElementById('game-mode').value;
+                if (mode === 'ai' && this.game.turn() === 'b') {
+                    setTimeout(() => this.makeAIMove(), 300);
+                }
+            }
+
+            makeAIMove() {
+                if (this.game.game_over() || this.isGameOver) return;
+                const lvl = parseInt(document.getElementById('ai-level').value);
+                const best = this.engine.getBestMove(this.game, lvl);
+                if (best) {
+                    this.game.move(best);
+                    this.renderBoard();
+                    this.updateHistory();
+                    this.updateEvalBar();
+                    this.updateClockDisplay();
+                    this.updateStatusBadge();
+
+                    if (this.game.game_over()) {
+                        this.stopTimer();
+                        this.isGameOver = true;
+                        if (this.game.in_checkmate()) {
+                            this.showGameOver('Checkmate!', `${this.p2NameInput.value} (AI) wins by checkmate.`);
+                        } else {
+                            this.showGameOver('Game Drawn', 'Match ended in a draw.');
+                        }
+                    }
+                }
+            }
+
+            updateHistory() {
+                const hist = this.game.history({ verbose: true });
+                this.moveHistoryBody.innerHTML = '';
+                for (let i = 0; i < hist.length; i += 2) {
+                    const tr = document.createElement('tr');
+                    const wM = hist[i] ? (this.useUCI ? `${hist[i].from}${hist[i].to}` : hist[i].san) : '';
+                    const bM = hist[i+1] ? (this.useUCI ? `${hist[i+1].from}${hist[i+1].to}` : hist[i+1].san) : '';
+                    tr.innerHTML = `<td class="py-1.5 text-slate-600 font-bold">${i/2+1}.</td><td class="py-1.5 text-amber-400 font-semibold">${wM}</td><td class="py-1.5 text-slate-300 font-semibold">${bM}</td>`;
+                    this.moveHistoryBody.appendChild(tr);
+                }
+            }
+
+            updateEvalBar() {
+                const score = this.engine.evaluateBoard(this.game) / 100.0;
+                this.evalScore.textContent = score.toFixed(1);
+                let pct = 50 + (score * 5);
+                this.evalBarWhite.style.height = `${Math.max(5, Math.min(95, pct))}%`;
+            }
+
+            showGameOver(title, desc) {
+                document.getElementById('modal-title').textContent = title;
+                document.getElementById('modal-description').textContent = desc;
+                document.getElementById('game-over-modal').classList.remove('hidden');
+            }
+
+            initPreviewBoard() {
+                const pBoard = document.getElementById('preview-chessboard');
+                if (!pBoard) return;
+                pBoard.innerHTML = '';
+                const files = ['a','b','c','d','e','f','g','h'];
+                const ranks = ['8','7','6','5','4','3','2','1'];
+
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        const sq = `${files[c]}${ranks[r]}`;
+                        const sqEl = document.createElement('div');
+                        const isLight = (r + c) % 2 === 0;
+                        sqEl.className = `flex items-center justify-center cursor-pointer transition-colors ${isLight ? 'bg-slate-700 text-slate-300' : 'bg-slate-800 text-slate-400'}`;
+                        sqEl.textContent = sq;
+                        sqEl.dataset.sq = sq;
+
+                        sqEl.addEventListener('click', () => {
+                            if (!this.previewSq1 || (this.previewSq1 && this.previewSq2)) {
+                                this.previewSq1 = sq;
+                                this.previewSq2 = null;
+                            } else {
+                                this.previewSq2 = sq;
+                            }
+                            this.renderPreviewSelection();
+                        });
+
+                        pBoard.appendChild(sqEl);
+                    }
+                }
+            }
+
+            renderPreviewSelection() {
+                const pBoard = document.getElementById('preview-chessboard');
+                const sqDisplay = document.getElementById('preview-sq-display');
+                const sanDisplay = document.getElementById('preview-san-display');
+                const uciDisplay = document.getElementById('preview-uci-display');
+
+                Array.from(pBoard.children).forEach(child => {
+                    const sq = child.dataset.sq;
+                    if (sq === this.previewSq1) {
+                        child.className = 'flex items-center justify-center cursor-pointer bg-amber-500 text-slate-950 font-bold';
+                    } else if (sq === this.previewSq2) {
+                        child.className = 'flex items-center justify-center cursor-pointer bg-emerald-500 text-slate-950 font-bold';
+                    } else {
+                        const r = 8 - parseInt(sq[1]);
+                        const c = sq.charCodeAt(0) - 97;
+                        const isLight = (r + c) % 2 === 0;
+                        child.className = `flex items-center justify-center cursor-pointer transition-colors ${isLight ? 'bg-slate-700 text-slate-300' : 'bg-slate-800 text-slate-400'}`;
+                    }
+                });
+
+                if (this.previewSq1 && !this.previewSq2) {
+                    sqDisplay.textContent = `Selected Origin: ${this.previewSq1}`;
+                    sanDisplay.textContent = 'Select destination square...';
+                    uciDisplay.textContent = `${this.previewSq1}...`;
+                } else if (this.previewSq1 && this.previewSq2) {
+                    sqDisplay.textContent = `${this.previewSq1} ➔ ${this.previewSq2}`;
+                    uciDisplay.textContent = `${this.previewSq1}${this.previewSq2}`;
+
+                    // Check if move is legal on current board to show exact SAN
+                    const mObj = this.game.moves({ verbose: true }).find(m => m.from === this.previewSq1 && m.to === this.previewSq2);
+                    if (mObj) {
+                        sanDisplay.textContent = `${mObj.san} (Legal move on main board)`;
+                    } else {
+                        sanDisplay.textContent = `${this.previewSq1.toUpperCase()}➔${this.previewSq2.toUpperCase()} (Coordinate representation)`;
+                    }
+                } else {
+                    sqDisplay.textContent = 'None';
+                    sanDisplay.textContent = '-';
+                    uciDisplay.textContent = '-';
+                }
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => { window.chessStudio = new ChessMasterStudioApp(); });
+    </script>
+</body>
+</html>
